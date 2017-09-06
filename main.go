@@ -5,12 +5,16 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/vlad-s/gophircbot/config"
-	"github.com/vlad-s/gophircbot/irc"
-	"github.com/vlad-s/gophircbot/logger"
+	"github.com/sirupsen/logrus"
+	"github.com/vlad-s/gophirc"
+	"github.com/vlad-s/gophirc/config"
+	"github.com/vlad-s/gophircbot/bot"
 )
 
-var bot *irc.IRC
+var (
+	irc *gophirc.IRC
+	log = logrus.New()
+)
 
 func init() {
 	var count uint8
@@ -21,71 +25,37 @@ func init() {
 			count++
 			if count > 1 {
 				fmt.Println()
-				logger.Log.Warnln("Forcefully exiting")
+				log.Warnln("Forcefully exiting")
 				os.Exit(1)
 			}
 			fmt.Println()
-			logger.Log.WithField("reason", "SIGINT").Infoln("Quitting")
-			bot.Quit()
+			log.WithField("reason", "SIGINT").Infoln("Quitting")
+			irc.Quit()
 		}
 	}()
 }
 
 func main() {
-	logger.Log.Infoln("Starting up")
-
-	logger.Log.Infoln("Reading config.json")
 	conf, err := config.Parse("config.json")
 	if err != nil {
-		logger.Log.Fatalln(err)
+		log.Fatalln(err)
 	}
 
-	logger.Log.Infoln("Checking the config for errors")
 	err = conf.Check()
 	if err != nil {
-		logger.Log.Fatalln(err)
+		log.Fatalln(err)
 	}
 
-	logger.Log.WithFields(logger.Fields(map[string]interface{}{
-		"server": conf.Server.Address, "port": conf.Server.Port,
-	})).Infoln("Connecting to server")
-
-	bot = irc.New(irc.Server{
-		Address: conf.Server.Address,
-		Port:    conf.Server.Port,
-	})
-
-	err = bot.Connect()
+	irc = gophirc.New()
+	err = irc.Connect()
 	if err != nil {
-		logger.Log.Fatalln(err)
-	}
-	defer bot.Disconnect()
-
-	go logStates()
-
-	if err = bot.Loop(); err != nil {
-		logger.Log.Fatalln(err)
+		log.Fatalln(err)
 	}
 
-	logger.Log.Infoln("Exiting")
-}
+	bot.AddBasicCallbacks(irc)
+	bot.AddCTCPCallbacks(irc)
 
-func logStates() {
-	var c uint8
-	for {
-		select {
-		case <-bot.State.Connected:
-			c++
-			logger.Log.Infoln("Successfully connected to server")
-		case <-bot.State.Registered:
-			c++
-			logger.Log.Infoln("Successfully registered on network")
-		case <-bot.State.Identified:
-			c++
-			logger.Log.Infoln("Successfully identified to Nickserv")
-		}
-		if c == 3 {
-			break
-		}
+	if err = irc.Loop(); err != nil {
+		log.Fatalln(err)
 	}
 }

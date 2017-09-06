@@ -1,4 +1,4 @@
-package irc
+package bot
 
 import (
 	"fmt"
@@ -11,43 +11,11 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/c2h5oh/datasize"
 	"github.com/pkg/errors"
-	"github.com/vlad-s/gophircbot/config"
 )
 
-type User struct {
-	Nick string
-	User string
-	Host string
-}
-
-func (u User) String() string {
-	return fmt.Sprintf("%s!%s@%s", u.Nick, u.User, u.Host)
-}
-
-func (u User) IsAdmin() bool {
-	for _, v := range config.Get().Admins {
-		if v == u.Nick {
-			return true
-		}
-	}
-	return false
-}
-
-func ParseUser(u string) (*User, bool) {
-	if u[0] == ':' {
-		u = u[1:]
-	}
-	nb := strings.Index(u, "!")
-	ub := strings.Index(u, "@")
-	if nb == -1 || ub == -1 {
-		return nil, false
-	}
-	return &User{
-		Nick: u[:nb],
-		User: u[nb+1 : ub],
-		Host: u[ub+1:],
-	}, true
-}
+const (
+	VERSION = "gophircbot - See https://github.com/vlad-s/gophircbot"
+)
 
 func IsValidURL(u string) bool {
 	_, err := url.ParseRequestURI(u)
@@ -106,11 +74,4 @@ func GetTitle(u string) (title string, err error) {
 	}
 
 	return
-}
-
-func IsCTCP(s string) bool {
-	if s[0] == '\001' && s[len(s)-1:][0] == '\001' {
-		return true
-	}
-	return false
 }
