@@ -33,17 +33,20 @@ func (u User) IsAdmin() bool {
 	return false
 }
 
-func ParseUser(u string) User {
+func ParseUser(u string) (*User, bool) {
 	if u[0] == ':' {
 		u = u[1:]
 	}
 	nb := strings.Index(u, "!")
 	ub := strings.Index(u, "@")
-	return User{
+	if nb == -1 || ub == -1 {
+		return nil, false
+	}
+	return &User{
 		Nick: u[:nb],
 		User: u[nb+1 : ub],
 		Host: u[ub+1:],
-	}
+	}, true
 }
 
 func IsValidURL(u string) bool {
@@ -103,4 +106,11 @@ func GetTitle(u string) (title string, err error) {
 	}
 
 	return
+}
+
+func IsCTCP(s string) bool {
+	if s[0] == '\001' && s[len(s)-1:][0] == '\001' {
+		return true
+	}
+	return false
 }

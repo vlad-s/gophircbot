@@ -26,7 +26,7 @@ func init() {
 			}
 			fmt.Println()
 			logger.Log.WithField("reason", "SIGINT").Infoln("Quitting")
-			bot.Quit("SIGINT")
+			bot.Quit()
 		}
 	}()
 }
@@ -71,22 +71,20 @@ func main() {
 }
 
 func logStates() {
-	var c, r, i bool
+	var c uint8
 	for {
-		if bot.State.Connected && !c {
+		select {
+		case <-bot.State.Connected:
+			c++
 			logger.Log.Infoln("Successfully connected to server")
-			c = true
-		}
-		if bot.State.Registered && !r {
+		case <-bot.State.Registered:
+			c++
 			logger.Log.Infoln("Successfully registered on network")
-			r = true
-		}
-		if bot.State.Identified && !i {
+		case <-bot.State.Identified:
+			c++
 			logger.Log.Infoln("Successfully identified to Nickserv")
-			i = true
 		}
-
-		if c && r && i {
+		if c == 3 {
 			break
 		}
 	}

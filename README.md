@@ -14,6 +14,7 @@ Currently, the bot loads its config from a `config.json` file, the config's path
 * Logs if the bot gets kicked from a channel
 
 ## Features
+* Event callbacks
 * Events are parsed & commands are sent through goroutines
 * Gets links' titles or content-type & content-length if available
 * Parses CTCP events: `VERSION`, `TIME`, `PING`, and implements custom `RAW` and `QUIT`; the custom CTCP events can only be invoked by an admin user
@@ -22,19 +23,16 @@ Currently, the bot loads its config from a `config.json` file, the config's path
 * Graceful exit through a `quit chan struct{}`, handled either by a `SIGINT` (Ctrl-C) or a `CTCP QUIT`
 * Parses a user from an IRC formatted `nick!user@host` to a `User{}`
 * Config implements a basic checking on values
-
-
 * Many *(?)* more
 
 ## To do
 * **Extract the core functionality into a framework**
+* ~~Parse CTCP messages into events~~
 * Add defaults
-* Add more commands: `MODE`, `KICK`, etc.
+* ~~Add more commands: `MODE`, `KICK`, etc.~~
 * Add regex matching for nicknames, channels
 * Add command line flags/params for config & probably other things
-* Add methods for event callbacks
+* ~~Add methods for event callbacks~~
 * Connect the bot to a database, store info there
 * Load auto replies from an external source
-
-
 * Many *(?)* more

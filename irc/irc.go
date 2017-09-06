@@ -4,8 +4,8 @@ import (
 	"bufio"
 	"fmt"
 	"net"
+	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -24,20 +24,31 @@ type Server struct {
 }
 
 type State struct {
-	Connected  bool
-	Registered bool
-	Identified bool
+	Connected chan struct{}
+
+	registered bool
+	Registered chan struct{}
+
+	Identified chan struct{}
+}
+
+type Event struct {
+	Raw       string
+	Code      string
+	Source    string
+	User      *User
+	Arguments []string
+	Message   string
 }
 
 type IRC struct {
-	Conn   net.Conn
+	conn   net.Conn
 	Server Server
 
-	State State
+	State  State
+	Events map[string][]func(*Event)
 
-	Receiver chan string
-	Sent     chan string
-
+	raw  chan string
 	quit chan struct{}
 }
 
@@ -47,268 +58,238 @@ func (irc *IRC) Connect() error {
 	if err != nil {
 		return errors.Wrap(err, "Error dialing the host")
 	}
-	irc.Conn = c
+	irc.conn = c
 	return nil
 }
 
 func (irc *IRC) Disconnect() {
-	irc.Conn.Close()
-	irc.State.Connected = false
-
-	close(irc.Receiver)
-	close(irc.Sent)
-	close(irc.quit)
+	fmt.Fprint(irc.conn, "QUIT :Quitting\r\n")
+	irc.conn.Close()
 }
 
 func (irc *IRC) Loop() error {
-	var wg sync.WaitGroup
 	var gracefulExit bool
-
-	go irc.parseEvent()
 
 	go func() {
 		for {
 			select {
 			case <-irc.quit:
 				gracefulExit = true
-				irc.sendRaw("QUIT :Quitting")
 				irc.Disconnect()
 				return
-			case s := <-irc.Sent:
-				if config.Get().Debug {
-					logger.Log.Debugf("Sent:\t%q", s)
-				}
+			case s := <-irc.raw:
+				logger.Log.Debugf("Raw:\t%q", s)
 			}
 		}
 	}()
 
-	wg.Add(1)
-	go func() {
-		s := bufio.NewScanner(irc.Conn)
-		for s.Scan() {
-			irc.Receiver <- s.Text()
-		}
-		wg.Done()
-	}()
-	wg.Wait()
+	s := bufio.NewScanner(irc.conn)
+	for s.Scan() {
+		go irc.getRaw(s.Text())
+	}
 
 	if gracefulExit {
 		return nil
 	}
-	return errors.New("Error while looping")
+	return errors.Wrap(s.Err(), "Error while looping")
 }
 
-func (irc *IRC) sendRaw(s string) {
-	fmt.Fprint(irc.Conn, s+"\r\n")
-	irc.Sent <- s
+func (irc *IRC) AddEventCallback(code string, cb func(*Event)) *IRC {
+	irc.Events[code] = append(irc.Events[code], cb)
+	return irc
 }
 
-func (irc *IRC) parseEvent() {
-	for s := range irc.Receiver {
-		if config.Get().Debug {
-			logger.Log.Debugln("parseEvent():\t", s)
+func (irc *IRC) parseToEvent(raw string) (event *Event, ok bool) {
+	irc.raw <- raw
+	event = &Event{Raw: raw}
+	if raw[0] != ':' {
+		return
+	}
+
+	raw = raw[1:]
+	split := strings.Split(raw, " ")
+
+	event.Source = split[0]
+	event.Code = split[1]
+	event.Arguments = split[2:]
+
+	if u, ok := ParseUser(event.Source); ok {
+		event.User = u
+	}
+
+	if event.Code == "PRIVMSG" {
+		message := strings.Join(event.Arguments[1:], " ")[1:]
+		if IsCTCP(message) {
+			message = strings.Trim(message, "\001")
+			message_args := strings.Split(message, " ")
+			event.Code = message_args[0]
+			event.Arguments = message_args[1:]
 		}
+	}
 
-		split := strings.Split(s, " ")
+	return event, true
+}
 
-		if split[1] == "NOTICE" && split[2] == "*" && !irc.State.Registered {
-			irc.State.Connected = true
-			go irc.register()
-		}
-
+func (irc *IRC) getRaw(raw string) {
+	e, ok := irc.parseToEvent(raw)
+	if !ok {
+		split := strings.Split(e.Raw, " ")
 		if split[0] == "PING" {
-			go irc.pong(split[1])
+			irc.pong(split[1])
 		}
+	}
 
-		switch split[1] {
-		case "001":
-			go irc.identify()
-		case "900":
-			irc.State.Identified = true
-			for _, v := range config.Get().Server.Channels {
-				go irc.join(v)
-			}
-		case "404":
-			logger.Log.WithField("channel", split[3]).Warnln("Can't send to channel")
-		case "474":
-			logger.Log.WithField("channel", split[3]).Warnln("Can't join channel")
-		case "INVITE":
-			user := ParseUser(split[0])
-			channel := split[3][1:]
-			irc.join(channel)
-			irc.privMsg(channel, fmt.Sprintf("Hi %s, %s invited me here.", channel, user.Nick))
-		case "KICK":
-			if split[3] == config.Get().Nickname {
-				user := ParseUser(split[0])
-				channel := split[2]
+	for k, v := range irc.Events {
+		if k != e.Code {
+			continue
+		}
+		fmt.Println("calling funcs for k", k)
+		for _, f := range v {
+			f(e)
+		}
+	}
 
-				logger.Log.WithFields(logger.Fields(map[string]interface{}{
-					"user": user.Nick, "channel": channel,
-				})).Warnln("We got kicked from a channel")
-			}
-		case "PRIVMSG":
-			go irc.parsePrivMsg(split)
+	switch e.Code {
+	case "404":
+		logger.Log.WithField("channel", e.Arguments[0]).Warnln("Can't send to channel")
+	case "474":
+		logger.Log.WithField("channel", e.Arguments[0]).Warnln("Can't join channel")
+	case "KICK":
+		if e.Arguments[1] == config.Get().Nickname {
+			logger.Log.WithFields(logger.Fields(map[string]interface{}{
+				"user": e.User.Nick, "channel": e.Arguments[0],
+			})).Warnln("We got kicked from a channel")
 		}
 	}
 }
 
-func (irc *IRC) parsePrivMsg(s []string) {
-	user, replyTo := ParseUser(s[0]), s[2]
-	if replyTo == config.Get().Nickname {
-		replyTo = user.Nick
-	}
-
-	message := strings.Join(s[3:], " ")
-	message = strings.TrimPrefix(message, ":")
-	message = strings.TrimSpace(message)
-
-	switch message[0] {
-	case ',':
-		irc.parseCommand(replyTo, message, user)
-		return
-	case '\001':
-		irc.parseCtcp(replyTo, message, user)
-		return
-	}
-
-	s = strings.Split(message, " ")
-	for _, v := range s {
-		switch true {
-		case IsValidURL(v):
-			title, err := GetTitle(v)
-			if err != nil {
-				if config.Get().Debug {
-					logger.Log.Errorln(v, err)
-				}
-				return // todo: do something with the error?
-			}
-			irc.privMsg(replyTo, fmt.Sprintf("[URL] %s", title))
-		case v == "shrug":
-			irc.privMsg(replyTo, `¯\_(ツ)_/¯`)
-		}
-	}
-}
-
-func (irc *IRC) parseCommand(replyTo, message string, user User) {
+func (irc *IRC) parseCommand(replyTo, message string, user *User) {
 	message = strings.TrimPrefix(message, ",")
 	s := strings.Split(message, " ")
 
 	switch s[0] {
 	case "help":
-		irc.privMsg(replyTo, fmt.Sprintf("%s, %s", user.Nick, HELP))
+		irc.PrivMsg(replyTo, fmt.Sprintf("%s, %s", user.Nick, HELP))
 	case "say":
-		irc.privMsg(replyTo, strings.Join(s[1:], " "))
+		irc.PrivMsg(replyTo, strings.Join(s[1:], " "))
 	case "yell":
-		irc.privMsg(replyTo, strings.ToUpper(strings.Join(s[1:], " ")))
+		irc.PrivMsg(replyTo, strings.ToUpper(strings.Join(s[1:], " ")))
+	case "slap":
+		if len(s) < 2 {
+			irc.PrivMsg(replyTo, fmt.Sprintf("%s, usage: ,slap user", user.Nick))
+			return
+		}
+		irc.Action(replyTo, fmt.Sprintf("slaps %s around a bit with a large trout", s[1]))
 	case "join":
 		if !user.IsAdmin() {
-			irc.privMsg(replyTo, fmt.Sprintf("Sorry %s, can't let you do that.", user.Nick))
+			irc.PrivMsg(replyTo, fmt.Sprintf("Sorry %s, can't let you do that.", user.Nick))
 			return
 		}
 		if len(s) < 2 || s[1][0] != '#' {
-			irc.privMsg(replyTo, fmt.Sprintf("%s, usage: ,join #channel", user.Nick))
+			irc.PrivMsg(replyTo, fmt.Sprintf("%s, usage: ,join #channel", user.Nick))
 			return
 		}
-		irc.join(s[1])
+		irc.Join(s[1])
 	case "part":
 		if !user.IsAdmin() {
-			irc.privMsg(replyTo, fmt.Sprintf("Sorry %s, can't let you do that.", user.Nick))
+			irc.PrivMsg(replyTo, fmt.Sprintf("Sorry %s, can't let you do that.", user.Nick))
 			return
 		}
 		if len(s) < 2 || s[1][0] != '#' {
-			irc.privMsg(replyTo, fmt.Sprintf("%s, usage: ,part #channel", user.Nick))
+			irc.PrivMsg(replyTo, fmt.Sprintf("%s, usage: ,part #channel", user.Nick))
 			return
 		}
-		irc.part(s[1])
+		irc.Part(s[1])
 	}
 }
 
-func (irc *IRC) parseCtcp(replyTo, message string, user User) {
-	if message[len(message)-1:][0] != '\001' {
-		return
-	}
-
-	message = strings.Trim(message, "\001")
-	s := strings.Split(message, " ")
-
-	switch s[0] {
-	case "VERSION":
-		irc.notice(replyTo, fmt.Sprintf("\001VERSION %s\001", VERSION))
-	case "TIME":
-		irc.notice(replyTo, fmt.Sprintf("\001TIME %s\001", time.Now().Format(time.RFC850)))
-	case "PING":
-		irc.notice(replyTo, fmt.Sprintf("\001PING %s\001", s[1]))
-	case "QUIT":
-		if user.IsAdmin() {
-			irc.ctcp(replyTo, s[0], "OK")
-			irc.quit <- struct{}{}
+func (irc *IRC) AddCTCPCallbacks() {
+	irc.AddEventCallback("VERSION", func(e *Event) {
+		irc.Notice(e.User.Nick, fmt.Sprintf("\001VERSION %s\001", VERSION))
+	}).AddEventCallback("TIME", func(e *Event) {
+		irc.Notice(e.User.Nick, fmt.Sprintf("\001TIME %s\001", time.Now().Format(time.RFC850)))
+	}).AddEventCallback("PING", func(e *Event) {
+		irc.Notice(e.User.Nick, fmt.Sprintf("\001PING %s\001", e.Arguments[0]))
+	}).AddEventCallback("RAW", func(e *Event) {
+		if e.User.IsAdmin() {
+			irc.CTCP(e.User.Nick, e.Code, "OK")
+			irc.sendRaw(strings.Join(e.Arguments, " "))
 		} else {
-			irc.ctcp(replyTo, s[0], "NOTOK NOT_AN_ADMIN")
+			irc.CTCP(e.User.Nick, e.Code, "NOTOK NOT_AN_ADMIN")
 		}
-	case "RAW":
-		if user.IsAdmin() {
-			irc.ctcp(replyTo, s[0], "OK")
-			irc.sendRaw(strings.Join(s[1:], " "))
+	}).AddEventCallback("QUIT", func(e *Event) {
+		if e.User.IsAdmin() {
+			irc.CTCP(e.User.Nick, e.Code, "OK")
+			irc.Quit()
 		} else {
-			irc.ctcp(replyTo, s[0], "NOTOK NOT_AN_ADMIN")
+			irc.CTCP(e.User.Nick, e.Code, "NOTOK NOT_AN_ADMIN")
 		}
-	}
-
+	})
 }
 
-func (irc *IRC) pong(s string) {
-	irc.sendRaw(fmt.Sprintf("PONG %s", s))
-}
-
-func (irc *IRC) register() {
-	irc.sendRaw(fmt.Sprintf("USER %s 8 * %s", config.Get().Username, config.Get().Realname))
-	irc.sendRaw(fmt.Sprintf("NICK %s", config.Get().Nickname))
-
-	irc.State.Registered = true
-}
-
-func (irc *IRC) identify() {
-	if config.Get().Server.NickservPassword == "" {
-		return
-	}
-	irc.sendRaw(fmt.Sprintf("NS identify %s", config.Get().Server.NickservPassword))
-}
-
-func (irc *IRC) join(channel string) {
-	irc.sendRaw(fmt.Sprintf("JOIN %s", channel))
-}
-
-func (irc *IRC) part(channel string) {
-	irc.sendRaw(fmt.Sprintf("PART %s", channel))
-}
-
-func (irc *IRC) privMsg(replyTo, message string) {
-	irc.sendRaw(fmt.Sprintf("PRIVMSG %s :%s", replyTo, message))
-}
-
-func (irc *IRC) notice(replyTo, message string) {
-	irc.sendRaw(fmt.Sprintf("NOTICE %s :%s", replyTo, message))
-}
-
-func (irc *IRC) action(replyTo, message string) {
-	irc.sendRaw(fmt.Sprintf("PRIVMSG %s :\001ACTION %s\001", replyTo, message))
-}
-
-func (irc *IRC) ctcp(replyTo, ctcp, message string) {
-	irc.notice(replyTo, fmt.Sprintf("\001%s %s\001", ctcp, message))
-}
-
-func (irc *IRC) Quit(s string) {
+func (irc *IRC) Quit() {
 	irc.quit <- struct{}{}
 }
 
 func New(s Server) *IRC {
-	return &IRC{
+	i := &IRC{
 		Server: s,
 
-		Receiver: make(chan string),
-		Sent:     make(chan string),
+		State: State{
+			Connected:  make(chan struct{}),
+			Registered: make(chan struct{}),
+			Identified: make(chan struct{}),
+		},
+		Events: make(map[string][]func(*Event)),
 
+		raw:  make(chan string),
 		quit: make(chan struct{}, 1),
 	}
+
+	i.AddEventCallback("NOTICE", func(e *Event) {
+		if e.Arguments[0] == "*" && !i.State.registered {
+			i.State.Connected <- struct{}{}
+			i.Register()
+		}
+	}).AddEventCallback("001", func(e *Event) {
+		i.Identify()
+	}).AddEventCallback("900", func(e *Event) {
+		i.State.Identified <- struct{}{}
+		for _, v := range config.Get().Server.Channels {
+			i.Join(v)
+		}
+	}).AddEventCallback("INVITE", func(e *Event) {
+		channel := e.Arguments[1][1:]
+		i.Join(channel)
+		i.PrivMsg(channel, fmt.Sprintf("Hi %s, %s invited me here.", channel, e.User.Nick))
+	})
+
+	i.AddEventCallback("PRIVMSG", func(e *Event) {
+		replyTo := e.Arguments[0]
+		message := strings.Join(e.Arguments[1:], " ")[1:]
+
+		for _, v := range strings.Split(message, " ") {
+			switch true {
+			case IsValidURL(v):
+				if ok, _ := regexp.MatchString(`https?://(www\.)?(filelist\.ro|flro\.org)`, v); ok {
+					return
+				}
+
+				title, err := GetTitle(v)
+				if err != nil {
+					if config.Get().Debug {
+						logger.Log.Errorln(v, err)
+					}
+					return // todo: do something with the error?
+				}
+				i.PrivMsg(replyTo, fmt.Sprintf("[URL] %s", title))
+			case v == "shrug":
+				i.PrivMsg(replyTo, `¯\_(ツ)_/¯`)
+			}
+		}
+	})
+
+	i.AddCTCPCallbacks()
+
+	return i
 }
