@@ -39,19 +39,56 @@ func AddBasicCallbacks(irc *gophirc.IRC) {
 		message := strings.Join(e.Arguments[1:], " ")[1:]
 
 		for _, v := range strings.Split(message, " ") {
-			switch true {
-			case IsValidURL(v):
+			if IsValidURL(v) {
 				if ok, _ := regexp.MatchString(`https?://(www\.)?(filelist\.ro|flro\.org)`, v); ok {
 					return
 				}
-
 				title, err := GetTitle(v)
 				if err != nil {
 					return // todo: do something with the error?
 				}
 				irc.PrivMsg(replyTo, fmt.Sprintf("[URL] %s", title))
-			case v == "shrug":
-				irc.PrivMsg(replyTo, `¯\_(ツ)_/¯`)
+			}
+		}
+	}).AddEventCallback("PRIVMSG", func(e *gophirc.Event) {
+		replyTo := e.Arguments[0]
+		message := strings.Join(e.Arguments[1:], " ")[1:]
+
+		switch message {
+		case "shrug":
+			irc.PrivMsg(replyTo, `¯\_(ツ)_/¯`)
+		case `\o`:
+			irc.PrivMsg(replyTo, "o/")
+		}
+
+		if ok, _ := regexp.MatchString(`^[Ss]alut\s*[!.]?$`, message); ok {
+			irc.PrivMsg(replyTo, fmt.Sprintf("Salut, %s!", e.User.Nick))
+		}
+
+		if message[0] == ',' {
+			split := strings.Split(message[1:], " ")
+
+			switch split[0] {
+			case "say":
+				say(irc, e)
+			case "yell":
+				yell(irc, e)
+			case "nick":
+				nick(irc, e)
+			case "join":
+				join(irc, e)
+			case "part":
+				part(irc, e)
+			case "invite":
+				invite(irc, e)
+			case "k", "kick":
+				kick(irc, e)
+			case "b", "ban":
+				ban(irc, e)
+			case "ub", "unban":
+				unban(irc, e)
+			case "kb", "kickban":
+				kickban(irc, e)
 			}
 		}
 	})

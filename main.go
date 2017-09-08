@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"os/signal"
@@ -35,8 +36,12 @@ func init() {
 	}()
 }
 
+var configFlag = flag.String("config", "config.json", "Path to the config `file`")
+
 func main() {
-	conf, err := config.Parse("config.json")
+	flag.Parse()
+
+	conf, err := config.Parse(*configFlag)
 	if err != nil {
 		log.Fatalln(err)
 	}

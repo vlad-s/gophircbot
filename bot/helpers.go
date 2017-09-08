@@ -18,6 +18,12 @@ const (
 )
 
 func IsValidURL(u string) bool {
+	if len(u) < 7 { // len("http://")
+		return false
+	}
+	if u[:4] != "http" {
+		return false
+	}
 	_, err := url.ParseRequestURI(u)
 	if err != nil {
 		return false
@@ -62,8 +68,9 @@ func GetTitle(u string) (title string, err error) {
 		return "", errors.Wrap(err, "Can't make document from response")
 	}
 
-	title = fmt.Sprintf("%q", doc.Find("title").Text())
-	title = strings.Trim(title, "\"")
+	title = doc.Find("title").Text()
+	title = strings.Replace(title, "\r", "", -1)
+	title = strings.Replace(title, "\n", "", -1)
 
 	if len(title) > 150 {
 		title = title[:150] + " ..."

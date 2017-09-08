@@ -7,8 +7,6 @@ _* Initially the bot was developed with full functionality, extracting the core 
 ## Description
 The bot is currently a work in progress.
 
-The bot loads its config from a `config.json` file, the config's path being relative to the binary.
-
 ## Framework managed events 
 * See [gophirc](https://github.com/vlad-s/gophirc)
 
@@ -31,8 +29,12 @@ The bot loads its config from a `config.json` file, the config's path being rela
 
 ## To do
 - [ ] Add back user commands
+  - [x] Say, yell
+  - [x] Join, part, invite, kick, ban/unban
+  - [ ] Weather
 - [x] **Extract the core functionality into a framework** - see [gophirc](https://github.com/vlad-s/gophirc)
-- [ ] Add command line flags/params for config & probably other things
+- [ ] Add command line flags/params
+  - [x] For config
 - [x] Add methods for event callbacks
 - [ ] Connect the bot to a database, store info there
 - [ ] Load auto replies from an external source
