@@ -17,14 +17,14 @@ func AddCTCPCallbacks(irc *gophirc.IRC) {
 	}).AddEventCallback("PING", func(e *gophirc.Event) {
 		irc.Notice(e.User.Nick, fmt.Sprintf("\001PING %s\001", e.Arguments[0]))
 	}).AddEventCallback("RAW", func(e *gophirc.Event) {
-		if e.User.IsAdmin() {
+		if irc.IsAdmin(e.User) {
 			irc.CTCP(e.User.Nick, e.Code, "OK")
 			irc.SendRaw(strings.Join(e.Arguments, " "))
 		} else {
 			irc.CTCP(e.User.Nick, e.Code, "NOTOK NOT_AN_ADMIN")
 		}
 	}).AddEventCallback("QUIT", func(e *gophirc.Event) {
-		if e.User.IsAdmin() {
+		if irc.IsAdmin(e.User) {
 			irc.CTCP(e.User.Nick, e.Code, "OK")
 			irc.Quit()
 		} else {
@@ -55,6 +55,10 @@ func AddBasicCallbacks(irc *gophirc.IRC) {
 		message := strings.Join(e.Arguments[1:], " ")[1:]
 
 		switch message {
+		case "test":
+			irc.PrivMsg(replyTo, "test")
+		case "ping":
+			irc.PrivMsgf(replyTo, "pong %s", e.User.Nick)
 		case "shrug":
 			irc.PrivMsg(replyTo, `¯\_(ツ)_/¯`)
 		case `\o`:

@@ -44,7 +44,7 @@ func nick(irc *gophirc.IRC, event *gophirc.Event) {
 		return
 	}
 
-	if !event.User.IsAdmin() {
+	if !irc.IsAdmin(event.User) {
 		irc.PrivMsg(replyTo, fmt.Sprintf("Sorry %s, I can't let you do that.", event.User.Nick))
 		return
 	}
@@ -61,7 +61,7 @@ func join(irc *gophirc.IRC, event *gophirc.Event) {
 		return
 	}
 
-	if !event.User.IsAdmin() {
+	if !irc.IsAdmin(event.User) {
 		irc.PrivMsg(replyTo, fmt.Sprintf("Sorry %s, I can't let you do that.", event.User.Nick))
 		return
 	}
@@ -78,7 +78,7 @@ func part(irc *gophirc.IRC, event *gophirc.Event) {
 		return
 	}
 
-	if !event.User.IsAdmin() {
+	if !irc.IsAdmin(event.User) {
 		irc.PrivMsg(replyTo, fmt.Sprintf("Sorry %s, I can't let you do that.", event.User.Nick))
 		return
 	}
@@ -95,7 +95,7 @@ func invite(irc *gophirc.IRC, event *gophirc.Event) {
 		return
 	}
 
-	if !event.User.IsAdmin() {
+	if !irc.IsAdmin(event.User) {
 		irc.PrivMsg(replyTo, fmt.Sprintf("Sorry %s, I can't let you do that.", event.User.Nick))
 		return
 	}
@@ -112,7 +112,7 @@ func kick(irc *gophirc.IRC, event *gophirc.Event) {
 		return
 	}
 
-	if !event.User.IsAdmin() {
+	if !irc.IsAdmin(event.User) {
 		irc.PrivMsg(replyTo, fmt.Sprintf("Sorry %s, I can't let you do that.", event.User.Nick))
 		return
 	}
@@ -129,7 +129,7 @@ func ban(irc *gophirc.IRC, event *gophirc.Event) {
 		return
 	}
 
-	if !event.User.IsAdmin() {
+	if !irc.IsAdmin(event.User) {
 		irc.PrivMsg(replyTo, fmt.Sprintf("Sorry %s, I can't let you do that.", event.User.Nick))
 		return
 	}
@@ -146,7 +146,7 @@ func unban(irc *gophirc.IRC, event *gophirc.Event) {
 		return
 	}
 
-	if !event.User.IsAdmin() {
+	if !irc.IsAdmin(event.User) {
 		irc.PrivMsg(replyTo, fmt.Sprintf("Sorry %s, I can't let you do that.", event.User.Nick))
 		return
 	}
@@ -163,7 +163,7 @@ func kickban(irc *gophirc.IRC, event *gophirc.Event) {
 		return
 	}
 
-	if !event.User.IsAdmin() {
+	if !irc.IsAdmin(event.User) {
 		irc.PrivMsg(replyTo, fmt.Sprintf("Sorry %s, I can't let you do that.", event.User.Nick))
 		return
 	}

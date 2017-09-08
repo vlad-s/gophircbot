@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"sync"
 
 	"github.com/sirupsen/logrus"
 	"github.com/vlad-s/gophirc"
@@ -13,8 +14,10 @@ import (
 )
 
 var (
-	irc *gophirc.IRC
-	log = logrus.New()
+	servers []*gophirc.IRC
+	log     = logrus.New()
+
+	configFlag = flag.String("config", "config.json", "Path to the config `file`")
 )
 
 func init() {
@@ -31,12 +34,13 @@ func init() {
 			}
 			fmt.Println()
 			log.WithField("reason", "SIGINT").Infoln("Quitting")
-			irc.Quit()
+
+			for _, v := range servers {
+				v.Quit()
+			}
 		}
 	}()
 }
-
-var configFlag = flag.String("config", "config.json", "Path to the config `file`")
 
 func main() {
 	flag.Parse()
@@ -51,16 +55,20 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	irc = gophirc.New()
-	err = irc.Connect()
-	if err != nil {
-		log.Fatalln(err)
-	}
+	var wg sync.WaitGroup
+	for _, server := range conf.Servers {
+		irc := gophirc.New(server, &wg)
+		err = irc.Connect()
+		if err != nil {
+			log.Fatalln(err)
+		}
 
-	bot.AddBasicCallbacks(irc)
-	bot.AddCTCPCallbacks(irc)
+		servers = append(servers, irc)
 
-	if err = irc.Loop(); err != nil {
-		log.Fatalln(err)
+		bot.AddBasicCallbacks(irc)
+		bot.AddCTCPCallbacks(irc)
+
+		go irc.Loop()
 	}
+	wg.Wait()
 }
