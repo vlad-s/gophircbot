@@ -1,7 +1,9 @@
 package bot
 
 import (
+	"encoding/json"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -11,6 +13,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/c2h5oh/datasize"
 	"github.com/pkg/errors"
+	"github.com/vlad-s/gophircbot/api_config"
 )
 
 const (
@@ -49,7 +52,6 @@ func GetTitle(u string) (title string, err error) {
 		title = fmt.Sprintf("content-type %s", content_type[0])
 
 		content_length, ok := res.Header["Content-Length"]
-		fmt.Printf("Content length %v; %+v\n", ok, content_length)
 
 		if ok && content_length[0] != "" {
 			parsed_size, err := strconv.ParseInt(content_length[0], 10, 64)
@@ -80,5 +82,39 @@ func GetTitle(u string) (title string, err error) {
 		title = "[no title]"
 	}
 
+	return
+}
+
+func GetGif(query string) (reply string, err error) {
+	reply = "[giphy] "
+
+	apiConfig := api_config.Get()
+	giphyUrl := "https://api.giphy.com/v1/gifs/search?q=%s&api_key=%s&limit=%d"
+
+	queryUrl := fmt.Sprintf(giphyUrl, url.QueryEscape(query), apiConfig.Giphy.ApiKey, apiConfig.Giphy.Limit)
+	res, err := http.Get(queryUrl)
+	if err != nil {
+		return "", errors.Wrap(err, "Error requesting the giphy URL")
+	}
+	defer res.Body.Close()
+
+	var gifs api_config.GiphyResponse
+	err = json.NewDecoder(res.Body).Decode(&gifs)
+	if err != nil {
+		return "", errors.Wrap(err, "Error decoding the JSON response")
+	}
+
+	if gifs.Pagination.Total == 0 || gifs.Pagination.Count == 0 || len(gifs.Data) == 0 {
+		reply += "no GIFs found :("
+		return
+	}
+
+	gif := gifs.Data[rand.Intn(gifs.Pagination.Count)]
+
+	if gif.Rating == "r" {
+		reply += "NSFW "
+	}
+
+	reply += gif.ShortURL
 	return
 }

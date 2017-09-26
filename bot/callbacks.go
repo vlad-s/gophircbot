@@ -35,7 +35,6 @@ func AddCTCPCallbacks(irc *gophirc.IRC) {
 
 func AddBasicCallbacks(irc *gophirc.IRC) {
 	irc.AddEventCallback("PRIVMSG", func(e *gophirc.Event) {
-		replyTo := e.Arguments[0]
 		message := strings.Join(e.Arguments[1:], " ")[1:]
 
 		for _, v := range strings.Split(message, " ") {
@@ -45,28 +44,33 @@ func AddBasicCallbacks(irc *gophirc.IRC) {
 				}
 				title, err := GetTitle(v)
 				if err != nil {
-					return // todo: do something with the error?
+					return
 				}
-				irc.PrivMsg(replyTo, fmt.Sprintf("[URL] %s", title))
+				irc.PrivMsgf(e.ReplyTo, "[URL] %s", title)
 			}
 		}
 	}).AddEventCallback("PRIVMSG", func(e *gophirc.Event) {
-		replyTo := e.Arguments[0]
 		message := strings.Join(e.Arguments[1:], " ")[1:]
 
 		switch message {
 		case "test":
-			irc.PrivMsg(replyTo, "test")
+			irc.PrivMsg(e.ReplyTo, "test")
 		case "ping":
-			irc.PrivMsgf(replyTo, "pong %s", e.User.Nick)
+			irc.PrivMsgf(e.ReplyTo, "pong %s", e.User.Nick)
 		case "shrug":
-			irc.PrivMsg(replyTo, `¯\_(ツ)_/¯`)
+			irc.PrivMsg(e.ReplyTo, `¯\_(ツ)_/¯`)
 		case `\o`:
-			irc.PrivMsg(replyTo, "o/")
+			irc.PrivMsg(e.ReplyTo, `o/`)
+		case `o/`:
+			irc.PrivMsg(e.ReplyTo, `\o`)
 		}
 
 		if ok, _ := regexp.MatchString(`^[Ss]alut\s*[!.]?$`, message); ok {
-			irc.PrivMsg(replyTo, fmt.Sprintf("Salut, %s!", e.User.Nick))
+			irc.PrivMsgf(e.ReplyTo, "Salut, %s!", e.User.Nick)
+		}
+
+		if ok, _ := regexp.MatchString(`^[Hh](i|ello)\s*[!.]?$`, message); ok {
+			irc.PrivMsgf(e.ReplyTo, "Hello, %s!", e.User.Nick)
 		}
 
 		if message[0] == ',' {
@@ -93,6 +97,8 @@ func AddBasicCallbacks(irc *gophirc.IRC) {
 				unban(irc, e)
 			case "kb", "kickban":
 				kickban(irc, e)
+			case "gif":
+				searchGif(irc, e)
 			}
 		}
 	})

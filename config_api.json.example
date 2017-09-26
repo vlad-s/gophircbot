@@ -1,0 +1,6 @@
+{
+  "giphy": {
+    "api_key": "your-api-key-here",
+    "limit": 10
+  }
+}

@@ -28,13 +28,16 @@ The bot is currently a work in progress.
 
 
 ## To do
+- [ ] **Add Go documentation**
 - [ ] Add back user commands
   - [x] Say, yell
   - [x] Join, part, invite, kick, ban/unban
   - [ ] Weather
+  - [x] giphy API
 - [x] **Extract the core functionality into a framework** - see [gophirc](https://github.com/vlad-s/gophirc)
 - [ ] Add command line flags/params
   - [x] For config
+  - [x] For API config
 - [x] Add methods for event callbacks
 - [ ] Connect the bot to a database, store info there
 - [ ] Load auto replies from an external source

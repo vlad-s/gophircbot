@@ -10,6 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/vlad-s/gophirc"
 	"github.com/vlad-s/gophirc/config"
+	"github.com/vlad-s/gophircbot/api_config"
 	"github.com/vlad-s/gophircbot/bot"
 )
 
@@ -17,7 +18,8 @@ var (
 	servers []*gophirc.IRC
 	log     = logrus.New()
 
-	configFlag = flag.String("config", "config.json", "Path to the config `file`")
+	configFlag    = flag.String("config", "config.json", "Path to the config `file`")
+	apiConfigFlag = flag.String("api_config", "config_api.json", "Path to the API config `file`")
 )
 
 func init() {
@@ -51,6 +53,11 @@ func main() {
 	}
 
 	err = conf.Check()
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	_, err = api_config.Parse(*apiConfigFlag)
 	if err != nil {
 		log.Fatalln(err)
 	}
