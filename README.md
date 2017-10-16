@@ -1,4 +1,7 @@
 # gophircbot
+[![GoDoc](https://godoc.org/github.com/vlad-s/gophircbot?status.svg)](https://godoc.org/github.com/vlad-s/gophircbot)
+[![Go Report Card](https://goreportcard.com/badge/github.com/vlad-s/gophircbot)](https://goreportcard.com/report/github.com/vlad-s/gophircbot)
+
 A simple IRC bot written from scratch*, in Go.
 Uses [gophirc](https://github.com/vlad-s/gophirc).
 
