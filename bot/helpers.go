@@ -13,13 +13,16 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/c2h5oh/datasize"
 	"github.com/pkg/errors"
-	"github.com/vlad-s/gophircbot/api_config"
+	"github.com/vlad-s/gophircbot/apiconfig"
+	"github.com/vlad-s/gophircbot/db"
 )
 
 const (
+	// VERSION stores the bot version
 	VERSION = "gophircbot - See https://github.com/vlad-s/gophircbot"
 )
 
+// IsValidURL returns whether a string is a valid URL.
 func IsValidURL(u string) bool {
 	if len(u) < 7 { // len("http://")
 		return false
@@ -34,6 +37,7 @@ func IsValidURL(u string) bool {
 	return true
 }
 
+// GetTitle returns the title of a web page, or an error in case it fails.
 func GetTitle(u string) (title string, err error) {
 	client := http.Client{Timeout: 5 * time.Second}
 	req, err := http.NewRequest("GET", u, nil)
@@ -47,18 +51,18 @@ func GetTitle(u string) (title string, err error) {
 		return "", errors.Wrap(err, "Can't make request")
 	}
 
-	content_type, ok := res.Header["Content-Type"]
-	if ok && !strings.Contains(content_type[0], "text/html") {
-		title = fmt.Sprintf("content-type %s", content_type[0])
+	contentTypes, ok := res.Header["Content-Type"]
+	if ok && !strings.Contains(contentTypes[0], "text/html") {
+		title = fmt.Sprintf("content-type %s", contentTypes[0])
 
-		content_length, ok := res.Header["Content-Length"]
+		contentLengths, ok := res.Header["Content-Length"]
 
-		if ok && content_length[0] != "" {
-			parsed_size, err := strconv.ParseInt(content_length[0], 10, 64)
+		if ok && contentLengths[0] != "" {
+			parsedSize, err := strconv.ParseInt(contentLengths[0], 10, 64)
 			if err != nil {
 				return title, errors.Wrap(err, "Can't parse content length")
 			}
-			size := datasize.ByteSize(parsed_size)
+			size := datasize.ByteSize(parsedSize)
 			title += fmt.Sprintf(", content-length %s", size.HumanReadable())
 		}
 
@@ -85,20 +89,21 @@ func GetTitle(u string) (title string, err error) {
 	return
 }
 
+// GetGif returns the giphy URL of a gif, searched by "query", or an error in case it fails.
 func GetGif(query string) (reply string, err error) {
 	reply = "[giphy] "
 
-	apiConfig := api_config.Get()
-	giphyUrl := "https://api.giphy.com/v1/gifs/search?q=%s&api_key=%s&limit=%d"
+	apiConfig := apiconfig.Get()
+	giphyURL := "https://api.giphy.com/v1/gifs/search?q=%s&api_key=%s&limit=%d"
 
-	queryUrl := fmt.Sprintf(giphyUrl, url.QueryEscape(query), apiConfig.Giphy.ApiKey, apiConfig.Giphy.Limit)
-	res, err := http.Get(queryUrl)
+	queryURL := fmt.Sprintf(giphyURL, url.QueryEscape(query), apiConfig.Giphy.APIKey, apiConfig.Giphy.Limit)
+	res, err := http.Get(queryURL)
 	if err != nil {
 		return "", errors.Wrap(err, "Error requesting the giphy URL")
 	}
 	defer res.Body.Close()
 
-	var gifs api_config.GiphyResponse
+	var gifs apiconfig.GiphyResponse
 	err = json.NewDecoder(res.Body).Decode(&gifs)
 	if err != nil {
 		return "", errors.Wrap(err, "Error decoding the JSON response")
@@ -117,4 +122,10 @@ func GetGif(query string) (reply string, err error) {
 
 	reply += gif.ShortURL
 	return
+}
+
+// IsIgnored returns whether the supplied nick is ignored or not.
+// Depends only on the database, the config array is verified by the framework.
+func IsIgnored(nick string) bool {
+	return !db.Get().Where("nick = ?", nick).First(&db.IgnoredUser{}).RecordNotFound()
 }

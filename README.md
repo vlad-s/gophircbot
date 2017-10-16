@@ -28,7 +28,7 @@ The bot is currently a work in progress.
 
 
 ## To do
-- [ ] **Add Go documentation**
+- [x] **Add Go documentation**
 - [ ] Add back user commands
   - [x] Say, yell
   - [x] Join, part, invite, kick, ban/unban
@@ -40,5 +40,6 @@ The bot is currently a work in progress.
   - [x] For API config
 - [x] Add methods for event callbacks
 - [ ] Connect the bot to a database, store info there
+  - [x] Ignored users
 - [ ] Load auto replies from an external source
 - [ ] Many *(?)* more

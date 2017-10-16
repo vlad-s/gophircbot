@@ -1,10 +1,12 @@
-package api_config
+package apiconfig
 
+// Giphy stores the API key and limit
 type Giphy struct {
-	ApiKey string `json:"api_key"`
+	APIKey string `json:"api_key"`
 	Limit  uint8  `json:"limit"`
 }
 
+// GiphyResponse stores the whole structure of the JSON response
 type GiphyResponse struct {
 	Data []struct {
 		ID       string `json:"id"`
