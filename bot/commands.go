@@ -198,6 +198,6 @@ func recognizeUser(irc *gophirc.IRC, event *gophirc.Event) {
 		logger.Log.WithField("nick", nick).
 			Errorln(errors.Wrap(err, "Error deleting ignored user from the database"))
 	} else {
-		irc.PrivMsgf(event.ReplyTo, "User %q will be recognized from now on")
+		irc.PrivMsgf(event.ReplyTo, "User %q will be recognized from now on.", nick)
 	}
 }
